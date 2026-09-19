@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>광주대학교 오늘의 학식</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="app">
+    <section class="hero">
+      <p class="eyebrow">GWANGJU UNIVERSITY</p>
+      <h1>광주대학교<br>오늘의 학식</h1>
+      <p class="sub">광주대학교 공식 식당메뉴 게시판의 최신 주간 식단을 불러옵니다.</p>
+      <button id="loadButton" type="button">최신 학식 새로고침</button>
+    </section>
+
+    <section id="status" class="status">최신 식단을 불러오는 중이에요…</section>
+
+    <section id="mealSection" class="meal-section hidden">
+      <div class="meal-header">
+        <div>
+          <p class="label">CAMPUS MEAL</p>
+          <h2 id="selectedDate">오늘의 학식</h2>
+        </div>
+      </div>
+
+      <div id="dateTabs" class="date-tabs" aria-label="식단 날짜 선택"></div>
+
+      <div class="category-tabs" role="tablist" aria-label="메뉴 종류 선택">
+        <button id="studentTab" class="category-tab active" type="button" data-category="student" aria-pressed="true">학생정식</button>
+        <button id="foodTab" class="category-tab" type="button" data-category="food" aria-pressed="false">푸드단품</button>
+      </div>
+
+      <div class="meal-card">
+        <p id="mealCardLabel" class="meal-card-label">학생정식</p>
+        <ul id="mealList" class="meal-list"></ul>
+        <p id="emptyMessage" class="empty-message hidden"></p>
+      </div>
+
+      <p id="parserNote" class="parser-note"></p>
+    </section>
+
+    <section id="sourceCard" class="source-card hidden">
+      <span class="label">공식 게시글</span>
+      <h2 id="postTitle"></h2>
+      <a id="postLink" target="_blank" rel="noreferrer">광주대학교 원문 보기 →</a>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
