@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>광주대학교 오늘의 학식</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="app">
+    <section class="hero">
+      <p class="eyebrow">GWANGJU UNIVERSITY</p>
+      <h1>광주대학교 오늘의 학식</h1>
+      <p class="sub">공식 식당메뉴 게시판의 최신 주간 식단에서 학생정식을 보여줍니다.</p>
+      <button id="loadButton">최신 학식 불러오기</button>
+    </section>
+
+    <section id="status" class="status">
+      아직 데이터를 불러오지 않았어요.
+    </section>
+
+    <section id="sourceCard" class="source-card hidden">
+      <span class="label">최신 게시글</span>
+      <h2 id="postTitle"></h2>
+      <a id="postLink" target="_blank" rel="noreferrer">학교 원문 보기 →</a>
+    </section>
+
+    <section id="mealWrap" class="meal-wrap hidden">
+      <div id="dateTabs" class="date-tabs"></div>
+      <article class="meal-card">
+        <span class="label">학생정식</span>
+        <h2 id="mealDate"></h2>
+        <ul id="mealItems" class="meal-items"></ul>
+        <p id="mealEmpty" class="meal-empty hidden">이 날짜의 학생정식 메뉴가 없습니다.</p>
+      </article>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
