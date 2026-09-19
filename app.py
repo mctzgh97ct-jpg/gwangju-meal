@@ -14,7 +14,7 @@ try:
 except Exception:
     pass
 
-BOARD_URL = "https://www.gwangju.ac.kr/bbs/?b_id=gwangju_jinwol_rm&mn=553&site=gwangju"
+BOARD_URL = "https://www.gwangju.ac.kr/bbs/?b_id=gwangju_jinwol_rm&mn=553&site=gwangju&type=lists"
 BASE_URL = "https://www.gwangju.ac.kr"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -47,78 +47,104 @@ def canonical_post_url(bs_idx):
 
 
 def get_latest_post():
-    """식당메뉴 목록에서 가장 큰 bs_idx의 게시글을 최신 글로 선택합니다.
+    """광주대학교 식당메뉴 목록에서 최신 게시글을 찾습니다.
 
-    제목 문구에만 의존하지 않아 학교가 제목 표현을 조금 바꿔도 동작하도록 했습니다.
+    목록 URL에 type=lists를 명시하고, 일반 링크 파싱에 실패하면
+    HTML 원문에 포함된 bs_idx도 추가로 찾아 Render 환경에서도
+    게시글을 놓치지 않도록 합니다.
     """
-    r = requests.get(BOARD_URL, headers=HEADERS, timeout=15)
+    r = requests.get(BOARD_URL, headers=HEADERS, timeout=20)
     r.raise_for_status()
     soup = BeautifulSoup(r.text, "html.parser")
 
     candidates = {}
+
+    # 1차: 실제 a 태그 href에서 bs_idx 수집
     for a in soup.find_all("a", href=True):
-        href = urljoin(BASE_URL, a.get("href", ""))
+        raw_href = a.get("href", "")
+        href = urljoin(BASE_URL, raw_href)
         parsed = urlparse(href)
         qs = parse_qs(parsed.query)
         bs_values = qs.get("bs_idx")
-        if not bs_values:
-            continue
 
-        try:
-            bs_idx = int(bs_values[0])
-        except (TypeError, ValueError):
-            continue
+        if bs_values:
+            try:
+                bs_idx = int(bs_values[0])
+            except (TypeError, ValueError):
+                continue
 
-        # 식당메뉴 게시판이 아닌 링크는 제외합니다.
-        b_id = (qs.get("b_id") or [""])[0]
-        if b_id and b_id != "gwangju_jinwol_rm":
-            continue
+            b_id = (qs.get("b_id") or [""])[0]
+            if b_id and b_id != "gwangju_jinwol_rm":
+                continue
 
-        own_text = " ".join(a.stripped_strings).strip()
-        parent_text = " ".join(a.parent.stripped_strings).strip() if a.parent else ""
-        row = a.find_parent("tr")
-        row_text = " ".join(row.stripped_strings).strip() if row else ""
-        title_text = own_text or parent_text or row_text
-
-        # 동일 게시글 링크가 여러 개면 더 설명적인 텍스트를 보존합니다.
-        current = candidates.get(bs_idx, "")
-        if len(title_text) > len(current):
+            row = a.find_parent("tr")
+            own_text = " ".join(a.stripped_strings).strip()
+            row_text = " ".join(row.stripped_strings).strip() if row else ""
+            title_text = row_text or own_text
             candidates[bs_idx] = title_text
 
+    # 2차: 학교 페이지가 onclick/script 안에 주소를 넣는 경우까지 대응
     if not candidates:
-        raise RuntimeError("식단 게시글 링크를 찾지 못했습니다. 학교 홈페이지 구조가 바뀌었을 수 있습니다.")
+        raw_html = r.text
+        patterns = [
+            r'bs_idx=(\d+)',
+            r'bs_idx%3D(\d+)',
+            r'["\']bs_idx["\']\s*[:=]\s*["\']?(\d+)',
+        ]
+        found = set()
+        for pattern in patterns:
+            for value in re.findall(pattern, raw_html, flags=re.I):
+                try:
+                    found.add(int(value))
+                except ValueError:
+                    pass
+        for bs_idx in found:
+            candidates[bs_idx] = ""
 
-    latest_idx = max(candidates)
-    post_url = canonical_post_url(latest_idx)
-
-    # 실제 상세 페이지에서 제목을 다시 확인합니다.
-    r = requests.get(post_url, headers=HEADERS, timeout=15)
-    r.raise_for_status()
-    detail = BeautifulSoup(r.text, "html.parser")
-
-    title = ""
-    for selector in ["h3", "h4", ".bbs_title", ".view_title", ".subject", "title"]:
-        for node in detail.select(selector):
-            text = " ".join(node.stripped_strings).strip()
-            if "메뉴" in text and ("학생" in text or "교직원" in text):
-                title = text
-                break
-        if title:
-            break
-
-    if not title:
-        page_text = "\n".join(detail.stripped_strings)
-        match = re.search(
-            r"(20\d{2}[.\-/]\s*\d{1,2}[.\-/]\s*\d{1,2}[^\n]{0,80}(?:학생정식|교직원)[^\n]{0,80}메뉴[^\n]*)",
-            page_text,
+    if not candidates:
+        raise RuntimeError(
+            "식단 게시글 링크를 찾지 못했습니다. "
+            "광주대학교 식당메뉴 목록을 불러왔지만 게시글 번호(bs_idx)를 확인할 수 없습니다."
         )
-        if match:
-            title = " ".join(match.group(1).split())
 
-    if not title:
-        title = candidates[latest_idx] or f"식당메뉴 게시글 #{latest_idx}"
+    # 최신 번호부터 실제 식단 게시글인지 확인
+    for latest_idx in sorted(candidates, reverse=True)[:10]:
+        post_url = canonical_post_url(latest_idx)
+        detail_response = requests.get(post_url, headers=HEADERS, timeout=20)
+        if not detail_response.ok:
+            continue
 
-    return {"title": title, "url": post_url, "bs_idx": latest_idx}
+        detail = BeautifulSoup(detail_response.text, "html.parser")
+        page_text = " ".join(detail.stripped_strings)
+
+        # 메뉴 게시글이 아닌 경우 건너뜀
+        if "메뉴" not in page_text or not any(word in page_text for word in ["학생정식", "교직원", "식단"]):
+            continue
+
+        title = ""
+        for selector in ["h3", "h4", ".bbs_title", ".view_title", ".subject", "title"]:
+            for node in detail.select(selector):
+                value = " ".join(node.stripped_strings).strip()
+                if "메뉴" in value and any(word in value for word in ["학생", "교직원", "식단"]):
+                    title = value
+                    break
+            if title:
+                break
+
+        if not title:
+            match = re.search(
+                r"(20\d{2}[.\-/]\s*\d{1,2}[.\-/]\s*\d{1,2}[^\n]{0,120}(?:학생정식|교직원|식단)[^\n]{0,120}메뉴[^\n]*)",
+                page_text,
+            )
+            if match:
+                title = " ".join(match.group(1).split())
+
+        if not title:
+            title = candidates.get(latest_idx) or f"식당메뉴 게시글 #{latest_idx}"
+
+        return {"title": title, "url": post_url, "bs_idx": latest_idx}
+
+    raise RuntimeError("최신 게시글 후보는 찾았지만 실제 식단 게시글을 확인하지 못했습니다.")
 
 
 def find_excel_attachment(post_url):
